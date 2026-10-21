@@ -1395,6 +1395,8 @@ func reverseGraphDependencies(program *driver.Program) map[string][]string {
 
 func serveGraphResolutionDigests(program *driver.Program, project string) (map[string]string, error) {
   digests := map[string]string{}
+  // Most targets are imported by many files, and resolving one reads the disk, so each is resolved once.
+  wired := map[string]string{}
   for _, source := range program.TSProgram.SourceFiles() {
     raw := shimcompiler.GetReferencedFilePaths(program.TSProgram, source)
     references := make([]string, 0, len(raw))
@@ -1403,9 +1405,14 @@ func serveGraphResolutionDigests(program *driver.Program, project string) (map[s
       if target == nil {
         continue
       }
-      file, err := serveGraphFile(project, string(target.FileName()), program.TSProgram.UseCaseSensitiveFileNames())
-      if err != nil {
-        return nil, err
+      name := string(target.FileName())
+      file, ok := wired[name]
+      if !ok {
+        var err error
+        if file, err = serveGraphFile(project, name, program.TSProgram.UseCaseSensitiveFileNames()); err != nil {
+          return nil, err
+        }
+        wired[name] = file
       }
       references = append(references, file)
     }
